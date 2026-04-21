@@ -1,0 +1,628 @@
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Minty</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        /* CSS Переменные для смены тем */
+        :root {
+            --bg-color: #FFFFFF;
+            --text-color: #000000;
+            --card-bg: #F8F8F8;
+            --border-color: #F0F0F0;
+            --header-bg: rgba(255, 255, 255, 0.95);
+            --modal-bg: #FFFFFF;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg-color); color: var(--text-color); min-height: 100vh; padding-bottom: 90px; overflow-x: hidden; transition: background 0.3s, color 0.3s; }
+
+        .header { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; background: var(--header-bg); position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--border-color); backdrop-filter: blur(10px); }
+        .header h1 { font-size: 22px; font-weight: 800; }
+        .buy-banner { background: var(--card-bg); margin: 12px 16px; padding: 14px 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; }
+        .ton-btn { background: #007AFF; padding: 10px 18px; border-radius: 40px; color: white; font-size: 14px; font-weight: 600; text-decoration: none; }
+
+        .tabs { display: flex; padding: 0 16px; gap: 20px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .tab { padding: 10px 0; font-size: 16px; font-weight: 600; color: #8E8E93; background: none; border: none; cursor: pointer; position: relative; }
+        .tab.active { color: var(--text-color); }
+        .tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2.5px; background: #007AFF; border-radius: 2px; }
+
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 16px; }
+        .card { background: var(--card-bg); border-radius: 18px; padding: 15px 8px; text-align: center; transition: transform 0.15s; position: relative; overflow: hidden; }
+        .card:active { transform: scale(0.94); }
+        .card .pattern-mini { position: absolute; inset: 0; opacity: 0.15; background-size: 50px; mix-blend-mode: overlay; z-index: 1; pointer-events: none; }
+        
+        /* Слоты */
+        .slot-machine { height: 20px; overflow: hidden; position: relative; }
+        .slot-track { display: flex; flex-direction: column; transition: transform 7s cubic-bezier(0.1, 0, 0.1, 1); }
+        .slot-item { height: 20px; line-height: 20px; text-align: right; font-weight: 700; font-size: 14px; white-space: nowrap; color: var(--text-color); }
+
+        .card tgs-player { width: 85%; aspect-ratio: 1; margin: 0 auto; display: block; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.05)); position: relative; z-index: 2; }
+        
+        .name { font-size: 13px; font-weight: 600; margin: 8px 0 4px; color: var(--text-color); position: relative; z-index: 2; }
+        .card.upgraded .name { color: #FFFFFF; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .price { color: #FF9500; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 3px; }
+        .price img { width: 15px; height: 15px; }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(10px); display: none; align-items: flex-end; justify-content: center; z-index: 1000; }
+        .modal.show { display: flex; }
+        .modal-content { background: var(--modal-bg); border-radius: 28px 28px 0 0; width: 100%; max-width: 500px; padding: 24px; position: relative; animation: slideUp 0.3s cubic-bezier(0.1, 0.9, 0.2, 1); max-height: 90vh; overflow-y: auto; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .roulette-container { position: relative; width: 100%; height: 260px; display: flex; align-items: center; overflow: hidden; border-radius: 28px 28px 0 0; transition: background 1.2s ease; margin: -24px -24px 20px -24px; width: calc(100% + 48px); }
+        .roulette-item { width: 160px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; box-sizing: border-box; }
+        .roulette-track { display: flex; align-items: center; will-change: transform; }
+        .roulette-item tgs-player { width: 130px; height: 130px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.15)); }
+
+        .preview-card-bg { position: relative; border-radius: 32px; padding: 45px 20px; text-align: center; overflow: hidden; margin-bottom: 20px; box-shadow: 0 12px 35px rgba(0,0,0,0.2); }
+        .pattern-overlay { position: absolute; inset: 0; opacity: 0.25; mix-blend-mode: overlay; background-size: 120px; pointer-events: none; z-index: 1; }
+        .preview-card-bg tgs-player { width: 160px; height: 160px; margin: 0 auto; display: block; position: relative; z-index: 2; filter: drop-shadow(0 15px 25px rgba(0,0,0,0.35)); }
+        
+        .info-row { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid var(--border-color); font-size: 15px; align-items: center; }
+        .info-label { color: #8E8E93; font-weight: 500; }
+        .info-value { font-weight: 700; color: var(--text-color); }
+        .badge { background: rgba(0,122,255,0.1); color: #007AFF; padding: 3px 9px; border-radius: 12px; font-size: 11px; margin-left: 6px; font-weight: 800; }
+
+        .btn { width: 100%; background: #007AFF; color: #FFF; border: none; padding: 17px; border-radius: 18px; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 15px rgba(0,122,255,0.25); }
+        .btn:active { transform: scale(0.97); opacity: 0.9; }
+        .action-buttons { display: flex; gap: 10px; margin: 15px 0 20px; }
+        .action-btn { flex: 1; background: var(--card-bg); color: var(--text-color); border: none; padding: 12px; border-radius: 14px; font-weight: 700; font-size: 14px; cursor: pointer; text-transform: lowercase; }
+
+        #profileWindow { display: none; position: fixed; inset: 0; background: var(--bg-color); z-index: 900; overflow-y: auto; padding: 16px; animation: fadeIn 0.2s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--header-bg); backdrop-filter: blur(15px); border-top: 1px solid var(--border-color); display: flex; padding: 10px 0 25px; justify-content: space-around; z-index: 800; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #8E8E93; background: none; border: none; font-weight: 600; gap: 4px; }
+        .nav-item.active { color: #007AFF; }
+        .nav-icon { font-size: 22px; }
+
+        /* Стили настроек */
+        .settings-select { background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 10px; outline: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Minty</h1>
+        <button style="background:none; border:none; font-size:20px; color:var(--text-color);" onclick="openSettings()">⚙️</button>
+    </div>
+
+    <div class="buy-banner">
+        <p style="font-weight:700;">Купить подарок</p>
+        <a href="#" class="ton-btn"> Stars за TON</a>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active">Подарки</button>
+        <button class="tab">Обычные</button>
+        <button class="tab">Маркет</button>
+    </div>
+
+    <div class="grid" id="giftsGrid"></div>
+
+    <div class="modal" id="buyModal"><div class="modal-content" id="buyModalContent"></div></div>
+    <div class="modal" id="collectibleModal"><div class="modal-content" id="collectibleModalContent"></div></div>
+
+    <div id="profileWindow">
+        <button class="back-btn" style="background:none; border:none; font-size:24px; color:var(--text-color);" onclick="closeProfile()">←</button>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; padding-top:10px;">
+             <h2 style="font-size:28px; font-weight:900;">Profile</h2>
+             <div style="background:var(--card-bg); padding:8px 15px; border-radius:20px; display:flex; align-items:center; gap:6px;">
+                 <img src="./images/stars.webp" style="width:18px;" onerror="this.style.display='none'">
+                 <span id="profileBalance" style="font-weight:800;">100000</span>
+             </div>
+        </div>
+        
+        <div style="background:var(--card-bg); border-radius:28px; padding:30px 20px; text-align:center; margin-bottom:25px;">
+            <div style="width:90px; height:90px; background:linear-gradient(135deg, #007AFF, #5856D6); border-radius:50%; margin:0 auto 15px; display:flex; align-items:center; justify-content:center; color:#FFF; font-size:40px; box-shadow: 0 10px 20px rgba(0,122,255,0.2);">👤</div>
+            <h3 style="font-size:22px; font-weight:800; margin-bottom:4px;">Pavel Durov</h3>
+            <p style="color:#8E8E93; font-weight:500;">+888 0000 0000</p>
+        </div>
+
+        <h4 style="font-size:13px; color:#8E8E93; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px; font-weight:700;">My Collection</h4>
+        <div class="grid" id="profileGiftsGrid"></div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="nav-item active" onclick="closeProfile()">
+            <span class="nav-icon">🎁</span>Подарки
+        </button>
+        <button class="nav-item">
+            <span class="nav-icon">⭐</span>Звезды
+        </button>
+        <button class="nav-item" onclick="openProfile()">
+            <span class="nav-icon">👤</span>Профиль
+        </button>
+    </div>
+
+    <script>
+        // =========================================================
+        // НАСТРОЙКИ, ТЕМЫ И РЕФЕРАЛЫ
+        // =========================================================
+        let userSettings = {
+            renderMode: 'tgs', // 'tgs' или 'png'
+            theme: 'light'     // 'light' или 'dark'
+        };
+
+        const tgUser = { id: 12345678 }; // Заглушка для рефки
+
+        function loadSettings() {
+            const saved = localStorage.getItem('mintySettings');
+            if (saved) {
+                try { userSettings = { ...userSettings, ...JSON.parse(saved) }; } catch(e) {}
+            }
+            applyTheme();
+        }
+
+        function saveSettings() {
+            localStorage.setItem('mintySettings', JSON.stringify(userSettings));
+            renderShop(); // Перерисовываем элементы с новыми настройками
+            if (document.getElementById('profileWindow').style.display === 'block') {
+                openProfile();
+            }
+        }
+
+        function applyTheme() {
+            const root = document.documentElement;
+            if(userSettings.theme === 'dark') {
+                root.style.setProperty('--bg-color', '#1c1c1e');
+                root.style.setProperty('--text-color', '#ffffff');
+                root.style.setProperty('--card-bg', '#2c2c2e');
+                root.style.setProperty('--border-color', '#38383a');
+                root.style.setProperty('--header-bg', 'rgba(28, 28, 30, 0.95)');
+                root.style.setProperty('--modal-bg', '#1c1c1e');
+            } else {
+                root.style.setProperty('--bg-color', '#FFFFFF');
+                root.style.setProperty('--text-color', '#000000');
+                root.style.setProperty('--card-bg', '#F8F8F8');
+                root.style.setProperty('--border-color', '#F0F0F0');
+                root.style.setProperty('--header-bg', 'rgba(255, 255, 255, 0.95)');
+                root.style.setProperty('--modal-bg', '#FFFFFF');
+            }
+        }
+
+        function toggleTheme() {
+            userSettings.theme = userSettings.theme === 'dark' ? 'light' : 'dark';
+            applyTheme();
+            saveSettings();
+            openSettings(); // Переоткрываем, чтобы обновить кнопку
+        }
+
+        function updateSetting(key, value) {
+            userSettings[key] = value;
+            saveSettings();
+        }
+
+        function copyRef() {
+            const link = document.getElementById('refLink');
+            link.select();
+            document.execCommand('copy');
+            alert('Реферальная ссылка скопирована!');
+        }
+
+        function openSettings() {
+            const content = document.getElementById('collectibleModalContent');
+            content.innerHTML = `
+                <div style="text-align:center; margin-bottom:20px;">
+                    <h2 style="font-size:24px; font-weight:800;">Настройки</h2>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Режим анимации</span>
+                    <select class="settings-select" onchange="updateSetting('renderMode', this.value)">
+                        <option value="tgs" ${userSettings.renderMode === 'tgs' ? 'selected' : ''}>3D (TGS)</option>
+                        <option value="png" ${userSettings.renderMode === 'png' ? 'selected' : ''}>2D (PNG)</option>
+                    </select>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Тема оформления</span>
+                    <button onclick="toggleTheme()" class="action-btn" style="flex:0; padding:8px 16px; margin:0;">
+                        ${userSettings.theme === 'dark' ? 'Светлая' : 'Темная'}
+                    </button>
+                </div>
+
+                <div style="background:var(--card-bg); padding:20px; border-radius:20px; margin-top:20px; text-align:center;">
+                    <h3 style="font-size:16px; margin-bottom:10px;">Реферальная система</h3>
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <input type="text" readonly value="https://t.me/MintyBot?start=ref${tgUser.id}" id="refLink" style="flex:1; padding:10px; border-radius:12px; border:1px solid var(--border-color); background:var(--bg-color); color:var(--text-color); outline:none;">
+                        <button class="btn" style="width:auto; margin:0; padding:10px 15px;" onclick="copyRef()">Копировать</button>
+                    </div>
+                    <p style="font-size:12px; color:#8E8E93; font-weight:600;">Приглашено: 0 | Заработано: 0 ⭐️</p>
+                </div>
+
+                <button class="btn" style="margin-top:20px;" onclick="closeModal('collectibleModal')">Готово</button>
+            `;
+            document.getElementById('collectibleModal').classList.add('show');
+        }
+
+        // =========================================================
+        // КАСТОМНЫЙ ПЛЕЕР ДЛЯ TGS
+        // =========================================================
+        window.tgsCache = {}; 
+
+        class TgsPlayer extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+                this.container = document.createElement('div');
+                this.container.style.width = '100%';
+                this.container.style.height = '100%';
+                this.shadowRoot.appendChild(this.container);
+                this.anim = null;
+                this.timer = null;
+            }
+
+            static get observedAttributes() { return ['src', 'mode']; }
+
+            attributeChangedCallback(name, old, val) {
+                if (name === 'src' && val) this.loadAnimation(val);
+            }
+
+            async loadAnimation(url) {
+                if (this.anim) { this.anim.destroy(); clearInterval(this.timer); }
+                try {
+                    const animData = await this.fetchData(url);
+                    const isStatic = this.getAttribute('mode') === 'static';
+                    this.anim = lottie.loadAnimation({
+                        container: this.container, renderer: 'svg', loop: true,
+                        autoplay: !isStatic, animationData: animData
+                    });
+                    if (isStatic) { this.anim.goToAndStop(0, true); } 
+                    else { this.startCycle(); }
+                } catch (e) { console.error('TGS Error:', e); }
+            }
+
+            async fetchData(url) {
+                if (window.tgsCache[url]) return window.tgsCache[url];
+                const res = await fetch(url);
+                const buf = await res.arrayBuffer();
+                const data = JSON.parse(pako.inflate(new Uint8Array(buf), { to: 'string' }));
+                window.tgsCache[url] = data;
+                return data;
+            }
+
+            startCycle() {
+                this.timer = setInterval(() => {
+                    if (this.anim.isPaused) {
+                        this.anim.play();
+                        setTimeout(() => this.anim.pause(), 4000);
+                    }
+                }, 8000);
+                setTimeout(() => this.anim.pause(), 4000);
+            }
+
+            disconnectedCallback() { clearInterval(this.timer); }
+        }
+        customElements.define('tgs-player', TgsPlayer);
+
+        // =========================================================
+        // ДАННЫЕ ПРОЕКТА
+        // =========================================================
+        const CDN_BASE = "/models/"; 
+
+        const CDN_BACKDROPS = "https://cdn.changes.tg/backdrops/";
+        
+        const PEPE_TYPES = ["Amalgam", "Aqua Plush", "Barcelona", "Bavaria", "Birmingham", "Christmas", "Cold Heart", "Cozy Galaxy", "Donatello", "Eggplant", "Emerald Plush", "Emo Boi", "Fifty Shades", "Frozen", "Gucci Leap", "Gummy Frog", "Hothead", "Hue Jester", "Kung Fu Pepe", "Leonardo", "Louis Vuittoad", "Magnate", "Marble", "Midas Pepe", "Milano", "Ninja Mike", "Original", "Pepe La Rana", "Pepemint", "Pink Galaxy", "Pink Latex", "Poison Dart", "Polka Dots", "Princess", "Pumpkin", "Puppy Pug", "Raphael", "Red Menace", "Red Pepple", "Santa Pepe", "Sketchy", "Spectrum", "Steel Frog", "Stripes", "Sunset", "Tropical", "Two Face", "X-Ray", "Yellow Hug", "Yellow Purp"];
+        const CAT_TYPES = ["Azuki Siam", "Bipolar Cat", "Blitzo", "Bubblegum", "Cake", "Caramel", "Cat Nukem", "Cat2O", "Cathulhu", "Caustic", "Celestia", "Chili Whisk", "Cookie", "Copperclaw", "Creeper", "El Tigre", "Endercat", "Esmeralda", "Fern", "Garfield", "Gecko Cat", "Goodbye Kitty", "Instacat", "Jaddy", "Jeopard", "Mentos", "Meowdas", "Misty Ash", "Nebula", "Niko", "Nyan Cat", "Obelisk", "Oreo", "Original", "Pepe Paws", "Phantom", "Purrlion", "Purrrple", "Puss in Boots", "Ranni", "Ruby", "Salem", "Silver Napper", "Torracat", "Vampkitty", "Vapurr", "Vice Kitty", "Virus", "Voodoo", "Weedcat", "Yolkster"];
+        
+        const FOLDER_MAP = {
+    'pepe': "Plush Pepe",
+    'cap': "Durov's Cap",
+    'cat': "Scared Cat",
+    'locket': "Heart Locket",
+    'bag': "Loot Bag",
+    'helmet': "Heroic Helmet",
+    'papakha': "Khabib's Papakha",
+    'brick': "Artisan Brick",
+    'astralshard': "Astral Shard"
+};
+  
+        const CAP_TYPES = ["Apple Slice", "Artwork", "Ashen", "Asterix", "Aurora", "Autumn", "Bluebird", "Bog Moss", "Bordeaux", "Candy Shade", "Captain", "Cartoon", "Chicago Bulls", "Classic", "Corkwood", "Cotton Candy", "Creamsicle", "Dipper", "Duck Tales", "Duskwave", "Falcon", "Freshwave", "Frosted Brew", "Frosthorn", "Fun Time", "Goldrose", "Honey Bee", "Ivory", "Jade", "Jetspin", "Krueger", "Macintosh", "Mossy", "Negative", "Neon", "Night Ivy", "Nightshade", "Original", "Patriot", "Pink Pop", "Pinkie Cap", "Pokemon", "Redrum", "RGB Glitch", "Sea Sunset", "Seabreeze", "Sepium", "Shadeux", "Shadow", "Sky High", "Snowfall", "Sunrise", "Toxic Guy", "Tron", "Villager", "Voltage"];
+        
+        const BACKDROPS = [
+            { "name": "Amber", "center": "#dab345", "edge": "#b1802a" },
+            { "name": "Dark Lilac", "center": "#b17da5", "edge": "#8c577a" },
+            { "name": "Indigo Dye", "center": "#537991", "edge": "#416479" },
+            { "name": "Black", "center": "#363738", "edge": "#0e0f0f" },
+            { "name": "Pure Gold", "center": "#ccab41", "edge": "#987b32" },
+            { "name": "Cyberpunk", "center": "#858ff3", "edge": "#865fd3" }
+        ];
+
+        let userStars = 100000;
+        let myInventory = [];
+
+const shopGifts = [
+    { id: 1, name: 'Plush Pepe', price: 2500, skinType: 'pepe' },
+    { id: 2, name: 'Durov Cap', price: 1000, skinType: 'cap' }, // Поищет cap.webp или TGS
+    { id: 3, name: 'Scared Cat', price: 250, skinType: 'cat' },
+    { id: 4, name: 'Heart Locket', price: 2000, skinType: 'locket' },
+    { id: 5, name: 'Loot Bag', price: 350, skinType: 'bag' },
+    { id: 6, name: 'Heroic Helmet', price: 350, skinType: 'helmet' },
+    { id: 7, name: 'Khabibs Papakha', price: 500, skinType: 'papakha' },
+    { id: 8, name: 'Artisan Brick', price: 1500, skinType: 'brick' },
+    { id: 9, name: 'Astral Shard', price: 1000, skinType: 'astralshard' },
+];
+
+        
+        function getSkinData(type) {
+            const map = {
+                'pepe': { path: `${CDN_BASE}Plush%20Pepe/`, list: PEPE_TYPES },
+                'cat': { path: `${CDN_BASE}Scared%20Cat/`, list: CAT_TYPES },
+                'cap': { path: `${CDN_BASE}Durov's%20Cap/`, list: CAP_TYPES }
+            };
+            return map[type] || map['pepe'];
+        }
+
+        // Универсальный генератор тегов в зависимости от настроек
+function getMediaTag(skinType, modelName = 'Original', customStyle = '') {
+    const folderName = FOLDER_MAP[skinType] || "Plush Pepe";
+    const isPng = (userSettings.renderMode === 'png');
+    
+    // --- РЕЖИМ 2D (PNG/WEBP) ---
+    if (isPng) {
+        let url;
+        // Если это обычный подарок для магазина
+        if (modelName === 'Original' && !customStyle.includes('static')) {
+            let fileName = skinType;
+            if (skinType === 'pepe') fileName = 'frog';
+
+        url = `./images/${fileName}.webp`;
+        } else {
+            // Если это улучшенная модель в режиме PNG — берем с CDN
+            url = `https://cdn.changes.tg/gifts/models/${encodeURIComponent(folderName)}/png/${encodeURIComponent(modelName)}.png`;
+        }
+
+        return `<img src="${url}" 
+                     style="width:85%; aspect-ratio:1; object-fit:contain; display:block; margin:0 auto; ${customStyle}" 
+                     onerror="this.onerror=null; this.src='./images/stars.webp';">`;
+    } 
+    
+    // --- РЕЖИМ 3D (TGS АНИМАЦИИ) ---
+    else {
+        // Анимации всегда берем с CDN, так как локально у тебя их нет
+        const encodedFolder = encodeURIComponent(folderName);
+        const encodedModel = encodeURIComponent(modelName);
+        const tgsUrl = `https://cdn.changes.tg/gifts/models/${encodedFolder}/${encodedModel}.tgs`;
+        const mode = customStyle.includes('static') ? 'mode="static"' : '';
+        
+        return `<tgs-player src="${tgsUrl}" ${mode} style="${customStyle}"></tgs-player>`;
+    }
+}
+
+
+        function saveInventory() {
+            localStorage.setItem('mintyInventory', JSON.stringify(myInventory));
+            localStorage.setItem('mintyStars', userStars);
+        }
+
+        function loadInventory() {
+            const savedInventory = localStorage.getItem('mintyInventory');
+            const savedStars = localStorage.getItem('mintyStars');
+            if (savedInventory) { try { myInventory = JSON.parse(savedInventory); } catch(e) { myInventory = []; } }
+            if (savedStars) { userStars = parseInt(savedStars) || 100000; }
+        }
+
+        // =========================================================
+        // ЛОГИКА ОТРИСОВКИ С УЧЕТОМ НАСТРОЕК
+        // =========================================================
+
+// Отрисовка магазина
+function renderShop() {
+    const grid = document.getElementById('giftsGrid');
+    grid.innerHTML = shopGifts.map(g => `
+        <div class="card" onclick="openBuyModal(${g.id})">
+            ${getMediaTag(g.skinType, 'Original')} 
+            <div class="name">${g.name}</div>
+            <div class="price"><img src="./images/stars.webp"> ${g.price}</div>
+        </div>
+    `).join('');
+}
+
+        function openBuyModal(id) {
+            const g = shopGifts.find(x => x.id === id);
+            const content = document.getElementById('buyModalContent');
+            content.innerHTML = `
+                <div style="text-align:center; margin-bottom:25px;">
+                    ${getMediaTag(g.skinType, 'Original', 'width:130px; height:130px; margin: 0 auto; display: block; filter:drop-shadow(0 10px 15px rgba(0,0,0,0.1));')}
+                    <h2 style="margin-top:15px; font-size:24px; font-weight:800;">${g.name}</h2>
+                    <p style="color:#8E8E93; font-weight:500;">Add this gift to your collection</p>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Price</span>
+                    <span class="info-value" style="color:#FF9500; font-size:18px; display:flex; align-items:center; gap:5px;">
+                        <img src="./images/stars.webp" style="width:20px;" onerror="this.style.display='none'"> ${g.price}
+                    </span>
+                </div>
+                <button class="btn" onclick="executePurchase(${g.id})">Купить за ${g.price} ★</button>
+                <button class="action-btn" style="width:100%; margin-top:10px;" onclick="closeModal('buyModal')">Отмена</button>
+            `;
+            document.getElementById('buyModal').classList.add('show');
+        }
+
+        function executePurchase(id) {
+    const g = shopGifts.find(x => x.id === id);
+    if(userStars < g.price) return alert("Недостаточно звезд!");
+    userStars -= g.price;
+    
+    const newItem = { 
+        instanceId: Date.now() + Math.random(), 
+        baseName: g.name, 
+        skinType: g.skinType,
+        modelName: 'Original', // ВАЖНО: явно указываем, что это оригинал
+        upgraded: false 
+    };
+    myInventory.push(newItem);
+    saveInventory(); 
+    closeModal('buyModal');
+    openProfile();
+}
+
+
+        function openProfile() {
+            document.getElementById('profileWindow').style.display = 'block';
+            document.getElementById('profileBalance').textContent = userStars;
+            const grid = document.getElementById('profileGiftsGrid');
+            
+            if(myInventory.length === 0) {
+                grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; padding:40px; color:#8E8E93;">Пока пусто</p>';
+                return;
+            }
+
+            grid.innerHTML = myInventory.map(item => {
+                let cardStyle = "";
+                if (item.upgraded) {
+                    cardStyle = `background: radial-gradient(circle at 50% 0%, ${item.backdrop.center} 0%, ${item.backdrop.edge} 100%); border: none;`;
+                }
+
+                return `
+                    <div class="card ${item.upgraded ? 'upgraded' : ''}" style="${cardStyle}" onclick="openItemDetail(${item.instanceId})">
+                        ${getMediaTag(item.skinType, item.upgraded ? item.modelName : 'Original')}
+                        <div class="name">${item.upgraded ? '#' + item.serial : item.baseName}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openItemDetail(id) {
+            const item = myInventory.find(x => x.instanceId === id);
+            const content = document.getElementById('collectibleModalContent');
+
+            if (!item.upgraded) {
+                content.innerHTML = `
+                    <div style="text-align:center; margin-bottom:20px;">
+                        ${getMediaTag(item.skinType, 'Original', 'width:140px; height:140px; margin: 0 auto 15px; display: block;')}
+                        <h2 style="font-size:24px; font-weight:800;">Received Gift</h2>
+                        <p style="color:#8E8E93; padding:10px 20px;">Улучшите этот подарок до уникального коллекционного предмета.</p>
+                    </div>
+                    <button class="btn" onclick="startUpgradeAnimation('${item.instanceId}')">Upgrade for 25 ★</button>
+                    <button class="action-btn" style="width:100%; margin-top:8px;" onclick="closeModal('collectibleModal')">Назад</button>
+                `;
+            } else {
+                renderUpgradedView(item);
+            }
+            document.getElementById('collectibleModal').classList.add('show');
+        }
+
+        function startUpgradeAnimation(id) {
+            const item = myInventory.find(x => x.instanceId == id);
+            if (!item) return;
+
+            if (userStars < 25) return alert("Недостаточно звезд!");
+            userStars -= 25;
+            saveInventory();
+            if(document.getElementById('profileBalance')) document.getElementById('profileBalance').textContent = userStars;
+            
+            const content = document.getElementById('collectibleModalContent');
+            const skinData = getSkinData(item.skinType);
+            
+            const targetModel = skinData.list[Math.floor(Math.random() * skinData.list.length)];
+            const targetBack = BACKDROPS[Math.floor(Math.random() * BACKDROPS.length)];
+            
+            let rouletteModels = [];
+            for(let i=0; i<60; i++) {
+                rouletteModels.push(i === 50 ? targetModel : skinData.list[Math.floor(Math.random() * skinData.list.length)]);
+            }
+
+            content.innerHTML = `
+                <div class="roulette-container" id="rouletteBox" style="background:#1a1a1a;">
+                    <div style="position:absolute; top:0; left:50%; transform:translateX(-50%); width:2px; height:100%; background:#007AFF; z-index:10; box-shadow:0 0 10px #007AFF;"></div>
+                    <div class="roulette-track" id="track" style="will-change: transform; display: flex; align-items: center; position:relative; z-index:2;">
+                        ${rouletteModels.map(m => `
+                            <div class="roulette-item" style="width:160px; flex-shrink:0; display:flex; justify-content:center;">
+                                ${getMediaTag(item.skinType, m, 'width:120px; height:120px; object-fit:contain; static')}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Model</span>
+                    <div class="slot-machine"><div class="slot-track" id="modelTrack">
+                        ${rouletteModels.map(m => `<div class="slot-item">${m}</div>`).join('')}
+                    </div></div>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Backdrop</span>
+                    <div class="slot-machine"><div class="slot-track" id="backTrack">
+                        ${Array(60).fill(0).map((_, i) => `<div class="slot-item">${i === 50 ? targetBack.name : '???'}</div>`).join('')}
+                    </div></div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const track = document.getElementById('track');
+                const mTrack = document.getElementById('modelTrack');
+                const bTrack = document.getElementById('backTrack');
+                const box = document.getElementById('rouletteBox');
+
+                const itemWidth = 160;
+                const finalX = (50 * itemWidth) - (box.offsetWidth / 2) + (itemWidth / 2);
+                const animStyle = "7s cubic-bezier(0.1, 0, 0.1, 1)";
+                
+                track.style.transition = `transform ${animStyle}`;
+                track.style.transform = `translate3d(-${finalX}px, 0, 0)`;
+                mTrack.style.transition = `transform ${animStyle}`;
+                mTrack.style.transform = `translate3d(0, -${50 * 20}px, 0)`;
+                bTrack.style.transition = `transform ${animStyle}`;
+                bTrack.style.transform = `translate3d(0, -${50 * 20}px, 0)`;
+
+                setTimeout(() => { box.style.background = `radial-gradient(circle, ${targetBack.center}, ${targetBack.edge})`; }, 5500);
+
+                setTimeout(() => {
+                    if (window.confetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                    
+                    item.upgraded = true;
+                    item.modelName = targetModel;
+                    item.backdrop = targetBack;
+                    item.serial = Math.floor(Math.random() * 8999) + 1001;
+                    
+                    saveInventory();
+                    setTimeout(() => renderUpgradedView(item), 2000); 
+                }, 7100);
+            }, 50);
+        }
+
+        function renderUpgradedView(item) {
+            const content = document.getElementById('collectibleModalContent');
+            const back = item.backdrop;
+
+            content.innerHTML = `
+                <div style="background: radial-gradient(circle, ${back.center}, ${back.edge}); margin: -24px -24px 20px -24px; height: 200px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 28px 28px 0 0;">
+                    ${getMediaTag(item.skinType, item.modelName, 'width: 150px; height: 150px;')}
+                    <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:8px; color:#fff; font-size:12px;">#${item.serial}</div>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">Model</span>
+                    <span class="info-value">${item.modelName}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Backdrop</span>
+                    <span class="info-value">${back.name}</span>
+                </div>
+
+                <button class="main-button" style="width: 100%; background: #007AFF; color: #FFF; border: none; padding: 17px; border-radius: 18px; font-size: 17px; font-weight: 700; margin-top:20px;" onclick="closeModal('collectibleModal')">Great!</button>
+            `;
+        }
+
+        function closeModal(id) { 
+            document.getElementById(id).classList.remove('show');
+            if(id === 'collectibleModal' && document.getElementById('profileWindow').style.display === 'block') openProfile(); 
+        }
+
+        function closeProfile() { document.getElementById('profileWindow').style.display = 'none'; }
+
+        // Инициализация
+        loadSettings();
+        loadInventory();
+        renderShop();
+    </script>
+</body>
+  </html>
